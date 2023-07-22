@@ -30,7 +30,7 @@ def get_local_ip():
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def receive_messages(port, pubkey, received_flag):
+def receive_messages(port, pubkey, received_flag, privkey):
     UDP_IP = get_local_ip()  # Listen on localhost only
 
     sock = generate_socket()
@@ -67,7 +67,7 @@ def main():
     # Start the listening thread
     pubkey, privkey = create_keys()
     received_flag = [False]  # Flag to indicate whether the public key has been received
-    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, received_flag))
+    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, received_flag, privkey))
     listen_thread.start()
 
     # Continuously send the public key until it receives an acknowledgement
