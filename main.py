@@ -32,44 +32,13 @@ def decrypt_message(data, private_key):
     except rsa.pkcs1.DecryptionError:
         print("\nFailed to decrypt the message.")
 
-def receive_messages(port, local_ip, private_key):
-    UDP_IP = local_ip
-
-    sock = generate_socket()
-    sock.bind((UDP_IP, port))
-
-    print("Listening for messages on {}:{}".format(UDP_IP, port))
-    try:
-        public_key_received = False
-        while not public_key_received:
-            data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
-            public_key = rsa.PublicKey.load_pkcs1(data)
-            print("\nReceived Public Key: {}".format(public_key))
-            sock.sendto(b"OK", addr)  # Send acknowledgment to sender
-            public_key_received = True
-
-            # Receive acknowledgment from sender
-            data, addr = sock.recvfrom(1024)
-            if data == b"OK":
-                print("\nHandshake successful. Starting encrypted communication.")
-            else:
-                print("\nHandshake failed. Unable to start encrypted communication.")
-                return
-
-        while True:
-            data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
-            decrypt_message(data, private_key)
-    except KeyboardInterrupt:
-        print("\nReceiver stopped.")
-
 def send_message(message, destination_ip, port):
     sock = generate_socket()
     sock.sendto(message, (destination_ip, port))
     sock.close()
 
 def main():
-    #destination_ip = input("Enter the IP address of the receiver: ")
-    destination_ip = "192.168.1.43"
+    destination_ip = input("Enter the IP address of the other party: ")
     port = 12345  # Use a specific port for communication
 
     local_ip = get_local_ip()
@@ -80,29 +49,59 @@ def main():
     listen_thread = threading.Thread(target=receive_messages, args=(port, local_ip, private_key))
     listen_thread.start()
 
-    # Send and receive public keys for two-way handshake
+    # Perform the handshake to exchange public keys
+    handshake_successful = False
     sock = generate_socket()
     public_key_bytes = public_key.save_pkcs1()
-    while True:
-        sock.sendto(public_key_bytes, (destination_ip, port))
+
+    while not handshake_successful:
+        # Send the public key
+        send_message(public_key_bytes, destination_ip, port)
+
+        # Receive the other party's public key
+        data, addr = sock.recvfrom(4096)
+        other_public_key = rsa.PublicKey.load_pkcs1(data)
+        print("\nReceived Public Key from the other party: {}".format(other_public_key))
+
+        # Acknowledge the received public key
+        sock.sendto(b"OK", addr)
+
+        # Verify that the handshake was successful
         data, addr = sock.recvfrom(1024)
         if data == b"OK":
-            break
+            handshake_successful = True
+            print("\nHandshake successful. Starting encrypted communication.")
         time.sleep(1)
 
-    # Send acknowledgment to receiver
-    sock.sendto(b"OK", (destination_ip, port))
-
-    # Start sending encrypted messages
+    # Start sending and receiving encrypted messages
     print("Type your message and press Enter. Type 'exit' to quit.")
     while True:
         message = input("Message: ")
         if message.lower() == "exit":
             break
 
-        encrypted_message = encrypt_message(message, public_key)
+        encrypted_message = encrypt_message(message, other_public_key)
         send_message(encrypted_message, destination_ip, port)
         time.sleep(1)  # Wait for 1 second before prompting for the next message
+
+def receive_messages(port, local_ip, private_key):
+    UDP_IP = local_ip
+
+    sock = generate_socket()
+    sock.bind((UDP_IP, port))
+
+    print("Listening for messages on {}:{}".format(UDP_IP, port))
+    try:
+        data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
+        other_public_key = rsa.PublicKey.load_pkcs1(data)
+        print("\nReceived Public Key from the other party: {}".format(other_public_key))
+        sock.sendto(data, addr)  # Send acknowledgment to sender
+
+        while True:
+            data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
+            decrypt_message(data, private_key)
+    except KeyboardInterrupt:
+        print("\nReceiver stopped.")
 
 if __name__ == "__main__":
     main()
