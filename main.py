@@ -30,14 +30,14 @@ def get_local_ip():
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def receive_messages(port, pubkey):
+def receive_messages(port, pubkey, received_flag):
     UDP_IP = get_local_ip()  # Listen on localhost only
 
     sock = generate_socket()
     sock.bind((UDP_IP, port))
 
     try:
-        while True:
+        while not received_flag[0]:
             data, addr = sock.recvfrom(1024)
             if data.startswith(b"-----BEGIN RSA PUBLIC KEY-----"):
                 # Received a public key from the other party
@@ -45,6 +45,7 @@ def receive_messages(port, pubkey):
                 print("\nReceived Public Key from the other party: {}".format(other_public_key))
                 # Send our public key in response
                 send_message(pubkey.save_pkcs1(), addr[0], port)
+                received_flag[0] = True
             else:
                 # Received an encrypted message
                 decrypted_message = decrypt_message(privkey, data)
@@ -63,11 +64,12 @@ def main():
 
     # Start the listening thread
     pubkey, privkey = create_keys()
-    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey))
+    received_flag = [False]  # Flag to indicate whether the public key has been received
+    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, received_flag))
     listen_thread.start()
 
     # Continuously send the public key until it receives an acknowledgement
-    while True:
+    while not received_flag[0]:
         try:
             send_message(pubkey.save_pkcs1(), destination_ip, port)
             print("Sent Public Key to the receiver.")
