@@ -6,11 +6,15 @@ def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def get_local_ip():
-    # Get the local IP address associated with the network interface
+    # Create a temporary socket to get the local IP address
+    temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        local_ip = socket.gethostbyname(socket.gethostname())
-    except socket.gaierror:
-        local_ip = "Cannot determine local IP address."
+        temp_sock.connect(("8.8.8.8", 80))  # Use a public IP as a dummy target
+        local_ip = temp_sock.getsockname()[0]
+    except socket.error:
+        local_ip = "127.0.0.1"  # Use localhost as a fallback if getting the local IP fails
+    finally:
+        temp_sock.close()
     return local_ip
 
 def receive_messages(port):
