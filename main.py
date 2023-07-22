@@ -4,11 +4,11 @@ import time
 import rsa
 
 def create_keys():
-    (pubkey, privkey) = rsa.newkeys(4096)
+    (pubkey, privkey) = rsa.newkeys(512)
     return pubkey, privkey
 
 def encrypt_message(pubkey, message):
-    encrypted_message = rsa.encrypt(message.encode('utf-8'), pubkey)
+    encrypted_message = rsa.encrypt(message, pubkey)
     return encrypted_message
 
 def decrypt_message(privkey, encrypted_message):
@@ -30,8 +30,8 @@ def get_local_ip():
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def receive_messages(port, pubkey, received_flag, privkey):
-    UDP_IP = get_local_ip()  # Listen on localhost only
+def receive_messages(port, pubkey, privkey, received_flag):
+    UDP_IP = get_local_ip()  # Use localhost only
 
     sock = generate_socket()
     sock.bind((UDP_IP, port))
@@ -43,17 +43,19 @@ def receive_messages(port, pubkey, received_flag, privkey):
                 # Received a public key from the other party
                 other_public_key = rsa.PublicKey.load_pkcs1(data)
                 print("\nReceived Public Key from the other party: {}".format(other_public_key))
-                # Send our public key in response
-                send_message(pubkey.save_pkcs1(), addr[0], port)
                 received_flag[0] = True
+            else:
+                # Received an encrypted message
+                decrypted_message = decrypt_message(privkey, data)
+                print("\nReceived Message: {}\n".format(decrypted_message.decode()))
     except KeyboardInterrupt:
         print("\nReceiver stopped.")
 
+    # Once the public key is received, keep listening for messages and decrypt them
     while True:
         data, addr = sock.recvfrom(1024)
         decrypted_message = decrypt_message(privkey, data)
         print("\nReceived Message: {}\n".format(decrypted_message.decode()))
-
 
 def send_message(message, destination_ip, port):
     sock = generate_socket()
@@ -67,10 +69,10 @@ def main():
     # Start the listening thread
     pubkey, privkey = create_keys()
     received_flag = [False]  # Flag to indicate whether the public key has been received
-    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, received_flag, privkey))
+    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, privkey, received_flag))
     listen_thread.start()
 
-    # Continuously send the public key until it receives an acknowledgement
+    # Continuously send the public key until it receives an acknowledgment
     while not received_flag[0]:
         try:
             send_message(pubkey.save_pkcs1(), destination_ip, port)
@@ -79,6 +81,16 @@ def main():
         except Exception as e:
             print("Error sending the public key:", e)
 
+    # Receive the other party's public key
+    other_public_key = None
+    while other_public_key is None:
+        try:
+            with open("other_pub_key.pem", "rb") as file:
+                data = file.read()
+                other_public_key = rsa.PublicKey.load_pkcs1(data)
+        except FileNotFoundError:
+            pass
+
     # Start sending and receiving encrypted messages
     print("Type your message and press Enter. Type 'exit' to quit.")
     while True:
@@ -86,7 +98,7 @@ def main():
         if message.lower() == "exit":
             break
 
-        encrypted_message = encrypt_message(pubkey, message)
+        encrypted_message = encrypt_message(other_public_key, message.encode('utf-8'))
         send_message(encrypted_message, destination_ip, port)
         time.sleep(1)  # Wait for 1 second before prompting for the next message
 
