@@ -30,7 +30,7 @@ def get_local_ip():
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def receive_messages(port, privkey, received_flag):
+def receive_messages(port, pubkey, received_flag):
     UDP_IP = get_local_ip()  # Listen on localhost only
 
     sock = generate_socket()
@@ -43,14 +43,17 @@ def receive_messages(port, privkey, received_flag):
                 # Received a public key from the other party
                 other_public_key = rsa.PublicKey.load_pkcs1(data)
                 print("\nReceived Public Key from the other party: {}".format(other_public_key))
+                # Send our public key in response
+                send_message(pubkey.save_pkcs1(), addr[0], port)
                 received_flag[0] = True
-            else:
-                # Received an encrypted message
-                if received_flag[0]:
-                    decrypted_message = decrypt_message(privkey, data)
-                    print("\nReceived Message: {}\n".format(decrypted_message.decode()))
     except KeyboardInterrupt:
         print("\nReceiver stopped.")
+
+    while True:
+        data, addr = sock.recvfrom(1024)
+        decrypted_message = decrypt_message(privkey, data)
+        print("\nReceived Message: {}\n".format(decrypted_message.decode()))
+
 
 def send_message(message, destination_ip, port):
     sock = generate_socket()
@@ -64,7 +67,7 @@ def main():
     # Start the listening thread
     pubkey, privkey = create_keys()
     received_flag = [False]  # Flag to indicate whether the public key has been received
-    listen_thread = threading.Thread(target=receive_messages, args=(port, privkey, received_flag))
+    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey, received_flag))
     listen_thread.start()
 
     # Continuously send the public key until it receives an acknowledgement
