@@ -1,7 +1,9 @@
-import socket
-import threading
-import time
+
 import rsa
+import socket
+import os
+import threading
+
 
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -18,52 +20,76 @@ def get_local_ip():
         temp_sock.close()
     return local_ip
 
-def receive_messages(port,privkey):
-    UDP_IP = get_local_ip()  # Listen on localhost only
+def load_other_pubkey(pubkey_filename):
+    with open(pubkey_filename, "rb") as pub_file:
+        pub_data = pub_file.read()
+        other_pubkey = rsa.PublicKey.load_pkcs1(pub_data)
+    return other_pubkey
 
-    sock = generate_socket()
-    sock.bind((UDP_IP, port))
+def load_privkey(privkey_filename):
+    with open(privkey_filename, "rb") as priv_file:
+        priv_data = priv_file.read()
+        privkey = rsa.PrivateKey.load_pkcs1(priv_data)
+    return privkey
 
-    #print("Listening for messages...")
+def encrypt_message(pubkey, message):
+    encrypted_message = rsa.encrypt(message.encode(), pubkey)
+    return encrypted_message
+
+def decrypt_message(privkey, encrypted_message):
+    decrypted_message = rsa.decrypt(encrypted_message, privkey)
+    return decrypted_message.decode()
+
+def receive_messages(sock, privkey, other_pubkey, client_address):
     try:
         while True:
             data, addr = sock.recvfrom(1024)
-            decrypted_message = rsa.decrypt(data, privkey).decode()
-            print("\nAnon: {}\n".format(decrypted_message))
+            decrypted_message = decrypt_message(privkey, data)
+            #print("\nReceived Message from Client {}: {}\n".format(client_address, decrypted_message))
+            print("Anon {}".format(decrypted_message))
     except KeyboardInterrupt:
-        print("\nReceiver stopped.")
-
-def send_message(message, destination_ip, port):
-    sock = generate_socket()
-    sock.sendto(message.encode(), (destination_ip, port))
-    sock.close()
+        print("\nServer stopped.")
 
 def main():
-    destination_ip = input("Enter the IP address of the receiver (127.0.0.1 for localhost): ")
-    port = 12345  # Use a specific port for communication
 
-    with open("private_key.pem", "rb") as priv_file:
-        priv_data = priv_file.read()
-        privkey = rsa.PrivateKey.load_pkcs1(priv_data)
+    # Load own keys
+    privkey = load_privkey("private_key.pem")
 
-    with open("other_pub_key.pem", "rb") as other_pub_file:
-        other_pub_data = other_pub_file.read()
-        other_pubkey = rsa.PublicKey.load_pkcs1(other_pub_data)
+    # Load other party's public key
+    other_pubkey = load_other_pubkey("other_pub_key.pem")
+
+    UDP_IP = get_local_ip()  # Listen on localhost only
+    UDP_PORT = 12345
+
+    # Create a UDP socket
+    server_socket = generate_socket()
+    server_socket.bind((UDP_IP, UDP_PORT))
+
+    print("Waiting for a client to connect...")
+
+    client_address = None
+    while client_address is None:
+        data, addr = server_socket.recvfrom(1024)
+        client_address = addr
+
+    print("Client connected:", client_address)
 
     # Start the listening thread
-    listen_thread = threading.Thread(target=receive_messages, args=(port,privkey))
+    listen_thread = threading.Thread(target=receive_messages, args=(server_socket, privkey, other_pubkey, client_address))
     listen_thread.start()
 
+    # Main thread continues to send messages to the client
     print("Type your message and press Enter. Type 'exit' to quit.")
     while True:
         message = input("")
         if message.lower() == "exit":
             break
-        message = rsa.encrypt(message.encode(), other_pubkey)
-        send_message(message, destination_ip, port)
-        time.sleep(1)  # Wait for 1 second before prompting for the next message
+
+        encrypted_message = encrypt_message(other_pubkey, message)
+        server_socket.sendto(encrypted_message, client_address)
+
+    # Clean up and close the socket
+    server_socket.close()
 
 if __name__ == "__main__":
     main()
-
-socket.close()
