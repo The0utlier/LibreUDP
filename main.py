@@ -46,7 +46,7 @@ server_socket.listen(1)
 print("Waiting for a client to connect...")
 
 client_socket, client_address = server_socket.accept()
-print("Client connected:", client_address)
+print("Client connected. IP address:", client_address[0])
 
 # Send the public key to the client
 pubkey_bytes = pubkey.save_pkcs1()
