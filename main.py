@@ -30,7 +30,7 @@ def get_local_ip():
 def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def receive_messages(port, privkey):
+def receive_messages(port, pubkey):
     UDP_IP = get_local_ip()  # Listen on localhost only
 
     sock = generate_socket()
@@ -39,8 +39,16 @@ def receive_messages(port, privkey):
     try:
         while True:
             data, addr = sock.recvfrom(1024)
-            decrypted_message = decrypt_message(privkey, data)
-            print("\nReceived Message: {}\n".format(decrypted_message.decode()))
+            if data.startswith(b"-----BEGIN RSA PUBLIC KEY-----"):
+                # Received a public key from the other party
+                other_public_key = rsa.PublicKey.load_pkcs1(data)
+                print("\nReceived Public Key from the other party: {}".format(other_public_key))
+                # Send our public key in response
+                send_message(pubkey.save_pkcs1(), addr[0], port)
+            else:
+                # Received an encrypted message
+                decrypted_message = decrypt_message(privkey, data)
+                print("\nReceived Message: {}\n".format(decrypted_message.decode()))
     except KeyboardInterrupt:
         print("\nReceiver stopped.")
 
@@ -55,25 +63,17 @@ def main():
 
     # Start the listening thread
     pubkey, privkey = create_keys()
-    listen_thread = threading.Thread(target=receive_messages, args=(port, privkey))
+    listen_thread = threading.Thread(target=receive_messages, args=(port, pubkey))
     listen_thread.start()
 
-    # Send the public key until it is received
+    # Continuously send the public key until it receives an acknowledgement
     while True:
         try:
             send_message(pubkey.save_pkcs1(), destination_ip, port)
             print("Sent Public Key to the receiver.")
             time.sleep(1)  # Wait for 1 second before retrying
-            # Check if the receiver has sent its public key
-            sock = generate_socket()
-            sock.bind(("127.0.0.1", port))
-            data, addr = sock.recvfrom(4096)
-            other_public_key = rsa.PublicKey.load_pkcs1(data)
-            print("\nReceived Public Key from the other party: {}".format(other_public_key))
-            sock.close()
-            break  # Exit the loop if the other public key is received
         except Exception as e:
-            print("Error sending/receiving the public key:", e)
+            print("Error sending the public key:", e)
 
     # Start sending and receiving encrypted messages
     print("Type your message and press Enter. Type 'exit' to quit.")
@@ -82,7 +82,7 @@ def main():
         if message.lower() == "exit":
             break
 
-        encrypted_message = encrypt_message(other_public_key, message)
+        encrypted_message = encrypt_message(pubkey, message)
         send_message(encrypted_message, destination_ip, port)
         time.sleep(1)  # Wait for 1 second before prompting for the next message
 
