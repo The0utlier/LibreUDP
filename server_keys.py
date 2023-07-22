@@ -10,7 +10,7 @@ def get_local_ip():
     # Create a temporary socket to get the local IP address
     temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        temp_sock.connect(("8.8.8.8", 80))  # Use a public IP as a dummy target
+        temp_sock.connect(("192.168.1.1", 80))  # Use a public IP as a dummy target
         local_ip = temp_sock.getsockname()[0]
     except socket.error:
         local_ip = "127.0.0.1"  # Use localhost as a fallback if getting the local IP fails
