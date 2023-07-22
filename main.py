@@ -19,7 +19,7 @@ def generate_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def generate_rsa_keys():
-    return rsa.newkeys(2048)  # Generate 4096-bit RSA keys
+    return rsa.newkeys(4096)  # Generate 4096-bit RSA keys
 
 def encrypt_message(message, public_key):
     encrypted_message = rsa.encrypt(message.encode(), public_key)
@@ -46,7 +46,7 @@ def receive_messages(port, local_ip, private_key):
             public_key = rsa.PublicKey.load_pkcs1(data)
             print("\nReceived Public Key: {}".format(public_key))
             public_key_received = True
-            sock.sendto("OK".encode(), addr)  # Send acknowledgment to sender
+            sock.sendto(b"OK", addr)  # Send acknowledgment to sender
 
         while True:
             data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
@@ -56,11 +56,12 @@ def receive_messages(port, local_ip, private_key):
 
 def send_message(message, destination_ip, port):
     sock = generate_socket()
-    sock.sendto(message.encode(), (destination_ip, port))
+    sock.sendto(message, (destination_ip, port))
     sock.close()
 
 def main():
-    destination_ip = input("Enter the IP address of the receiver: ")
+    #destination_ip = input("Enter the IP address of the receiver: ")
+    destination_ip = 192.168.122.226
     port = 12345  # Use a specific port for communication
 
     local_ip = get_local_ip()
@@ -77,7 +78,7 @@ def main():
     while True:
         sock.sendto(public_key_bytes, (destination_ip, port))
         data, addr = sock.recvfrom(1024)
-        if data.decode() == "OK":
+        if data == b"OK":
             break
         time.sleep(1)
 
