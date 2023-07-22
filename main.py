@@ -1,5 +1,9 @@
 import socket
 import threading
+import time
+
+def generate_socket():
+    return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def get_local_ip():
     # Get the local IP address associated with the network interface
@@ -9,35 +13,41 @@ def get_local_ip():
         local_ip = "Cannot determine local IP address."
     return local_ip
 
+def receive_messages(port):
+    UDP_IP = get_local_ip()  # Listen on localhost only
 
-# IP and port for server to bind and communicate with clients
-UDP_IP = get_local_ip()  # Allow communication with any available network interface
-UDP_PORT = 5005
+    sock = generate_socket()
+    sock.bind((UDP_IP, port))
 
-# Create a UDP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    print("Listening for messages...")
+    try:
+        while True:
+            data, addr = sock.recvfrom(1024)
+            print("\nReceived Message: {}".format(data.decode()))
+    except KeyboardInterrupt:
+        print("\nReceiver stopped.")
 
-# Bind the socket to the specified IP and port to receive messages
-sock.bind((UDP_IP, UDP_PORT))
+def send_message(message, destination_ip, port):
+    sock = generate_socket()
+    sock.sendto(message.encode(), (destination_ip, port))
+    sock.close()
 
-def receive_messages():
+def main():
+    destination_ip = input("Enter the IP address of the receiver (127.0.0.1 for localhost): ")
+    port = 12345  # Use a specific port for communication
+
+    # Start the listening thread
+    listen_thread = threading.Thread(target=receive_messages, args=(port,))
+    listen_thread.start()
+
+    print("Type your message and press Enter. Type 'exit' to quit.")
     while True:
-        # Check if there's any data received
-        data, addr = sock.recvfrom(1024)
-        if data:
-            # Print the received message
-            print("Received message from {}: {}".format(addr, data.decode("utf-8")))
+        message = input("Message: ")
+        if message.lower() == "exit":
+            break
 
-# Start the thread to receive messages
-receive_thread = threading.Thread(target=receive_messages)
-receive_thread.daemon = True
-receive_thread.start()
+        send_message(message, destination_ip, port)
+        time.sleep(1)  # Wait for 1 second before prompting for the next message
 
-# Main loop to send messages
-print("UDP server is running on {}:{}".format(UDP_IP, UDP_PORT))
-while True:
-    # Get a new message from the user to send
-    message = input("Enter a message to send: ").encode("utf-8")
-
-    # Send the message to all connected clients
-    sock.sendto(message, (UDP_IP, UDP_PORT))
+if __name__ == "__main__":
+    main()
