@@ -1,4 +1,5 @@
 import rsa
+import os
 import socket
 
 def create_keys():
