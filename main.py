@@ -15,7 +15,6 @@ def receive_messages(port):
     try:
         while True:
             data, addr = sock.recvfrom(1024)
-            time.sleep(0.1)  # Wait for a short time before printing the received message
             print("\nReceived Message: {}".format(data.decode()))
     except KeyboardInterrupt:
         print("\nReceiver stopped.")
@@ -40,6 +39,7 @@ def main():
             break
 
         send_message(message, destination_ip, port)
+        time.sleep(1)  # Wait for 1 second before prompting for the next message
 
 if __name__ == "__main__":
     main()
