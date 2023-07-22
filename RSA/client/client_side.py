@@ -43,7 +43,7 @@ def main():
     # Load other party's public key
     other_pubkey = load_other_pubkey("other_pub_key.pem")
 
-    UDP_IP = "192.168.122.226" # Connect to localhost
+    UDP_IP = input("What is the address of the server? ") # Connect to localhost
     UDP_PORT = 12345
 
     # Create a UDP socket
