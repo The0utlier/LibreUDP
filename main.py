@@ -13,15 +13,14 @@ def encrypt_message(message, public_key):
     encrypted_message = rsa.encrypt(message.encode(), public_key)
     return encrypted_message
 
-def send_message(message):
-    UDP_IP = "127.0.0.1"
+def send_message(message, destination):
     UDP_PORT = 12345
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(message, (UDP_IP, UDP_PORT))
+    sock.sendto(message, (destination, UDP_PORT))
 
 def receive_message():
-    UDP_IP = "127.0.0.1"
+    UDP_IP = "127.0.0.1"  # Listen on all available interfaces
     UDP_PORT = 12345
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -41,8 +40,11 @@ def receive_message():
         print("Error receiving message:", e)
 
 def decrypt_message(data):
-    decrypted_message = rsa.decrypt(data, private_key).decode()
-    print("\n\nDecrypted Message: {}".format(decrypted_message))
+    try:
+        decrypted_message = rsa.decrypt(data, private_key).decode()
+        print("\n\nDecrypted Message: {}".format(decrypted_message))
+    except rsa.pkcs1.DecryptionError:
+        print("\n\nFailed to decrypt the message.")
 
 def main():
     global public_key, private_key
@@ -50,8 +52,6 @@ def main():
     try:
         # Generate RSA keys
         generate_rsa_keys()
-        #print("RSA Public Key: {}".format(public_key))
-        #print("RSA Private Key: {}".format(private_key))
 
         # Start the listening thread
         listen_thread = threading.Thread(target=receive_message)
@@ -62,7 +62,8 @@ def main():
 
         # Send public key as the first message
         public_key_bytes = public_key.save_pkcs1()
-        send_message(public_key_bytes)
+        destination_ip = input("Enter the IP address of the destination: ")
+        send_message(public_key_bytes, destination_ip)
 
         while True:
             user_choice = input("Do you want to send a message? (yes/no): ").lower()
@@ -70,7 +71,7 @@ def main():
                 message = input("Enter your message: ")
                 encrypted_message = encrypt_message(message, public_key)
                 #print("Encrypted Message: {}".format(encrypted_message))
-                send_message(encrypted_message)
+                send_message(encrypted_message, destination_ip)
             elif user_choice == "no":
                 break
             else:
