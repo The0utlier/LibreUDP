@@ -1,8 +1,6 @@
 import rsa
 import socket
-import threading
 
-import os
 def create_keys():
     (pubkey, privkey) = rsa.newkeys(4096)
     return pubkey, privkey
@@ -28,20 +26,6 @@ def load_keys_from_files():
 def keys_exist():
     return os.path.exists("public_key.pem") and os.path.exists("private_key.pem")
 
-def receive_messages(port, privkey):
-    UDP_IP = "127.0.0.1"
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((UDP_IP, port))
-
-    try:
-        while True:  # Keep receiving messages indefinitely
-            data, addr = sock.recvfrom(4096)
-            decrypted_message = rsa.decrypt(data, privkey)
-            print("\nReceived Message: {}\n".format(decrypted_message.decode()))
-    except KeyboardInterrupt:
-        print("\nReceiver stopped.")
-
 # Check if keys already exist
 if keys_exist():
     print("Keys already exist. Loading...")
@@ -51,47 +35,32 @@ else:
     pubkey, privkey = create_keys()
     save_keys_to_files(pubkey, privkey)
 
-print("Public Key:", pubkey)
-print("Private Key:", privkey)
-
-# Create a new thread for receiving messages
-port = 12345  # Use a specific port for communication
-listen_thread = threading.Thread(target=receive_messages, args=(port, privkey))
-listen_thread.start()
-
 # Create TCP socket
 TCP_IP = "127.0.0.1"
 TCP_PORT = 12345
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((TCP_IP, TCP_PORT))
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((TCP_IP, TCP_PORT))
+server_socket.listen(1)
 
-# Receive the server's public key
-data = client_socket.recv(4096)
-server_pubkey = rsa.PublicKey.load_pkcs1(data)
+print("Waiting for a client to connect...")
 
-print("Received Public Key from the server:", server_pubkey)
+client_socket, client_address = server_socket.accept()
+print("Client connected:", client_address)
 
-# Send the client's public key to the server
+# Send the public key to the client
 pubkey_bytes = pubkey.save_pkcs1()
 client_socket.send(pubkey_bytes)
 
-# Save the server's public key
-with open("server_pub_key.pem", "wb") as server_pub_file:
-    server_pub_file.write(data)
+# Receive the other party's public key
+data = client_socket.recv(4096)
+other_pubkey = rsa.PublicKey.load_pkcs1(data)
 
-# Start sending and receiving encrypted messages
-print("Type your message and press Enter. Type 'exit' to quit.")
-while True:
-    data = client_socket.recv(4096)
-    decrypted_message = rsa.decrypt(data, privkey)
-    print("Received Message:", decrypted_message.decode())
-    message = input("Message: ")
-    if message.lower() == "exit":
-        break
+print("Received Public Key from the client:", other_pubkey)
 
-    encrypted_message = rsa.encrypt(message.encode('utf-8'), server_pubkey)
-    client_socket.send(encrypted_message)
-
+# Save the other party's public key
+with open("other_pub_key.pem", "wb") as other_pub_file:
+    other_pub_file.write(data)
 
 client_socket.close()
+server_socket.close()
