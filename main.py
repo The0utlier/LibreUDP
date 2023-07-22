@@ -21,6 +21,14 @@ def generate_socket():
 def generate_rsa_keys():
     return rsa.newkeys(4096)  # Generate 4096-bit RSA keys
 
+def save_public_key(public_key, file_path):
+    with open(file_path, "wb") as f:
+        f.write(public_key.save_pkcs1())
+
+def load_public_key(file_path):
+    with open(file_path, "rb") as f:
+        return rsa.PublicKey.load_pkcs1(f.read())
+
 def encrypt_message(message, public_key):
     encrypted_message = rsa.encrypt(message.encode(), public_key)
     return encrypted_message
@@ -46,7 +54,7 @@ def main():
     public_key = rsa.PublicKey(private_key.n, private_key.e)
 
     # Start the listening thread
-    listen_thread = threading.Thread(target=receive_messages, args=(port, local_ip, private_key))
+    listen_thread = threading.Thread(target=receive_messages, args=(port, local_ip, public_key))
     listen_thread.start()
 
     # Perform the handshake to exchange public keys
@@ -62,9 +70,7 @@ def main():
         data, addr = sock.recvfrom(4096)
         other_public_key = rsa.PublicKey.load_pkcs1(data)
         print("\nReceived Public Key from the other party: {}".format(other_public_key))
-
-        # Acknowledge the received public key
-        sock.sendto(b"OK", addr)
+        sock.sendto(public_key_bytes, addr)
 
         # Verify that the handshake was successful
         data, addr = sock.recvfrom(1024)
@@ -72,6 +78,9 @@ def main():
             handshake_successful = True
             print("\nHandshake successful. Starting encrypted communication.")
         time.sleep(1)
+
+    # Save the received public key
+    save_public_key(other_public_key, "other_public_key.pem")
 
     # Start sending and receiving encrypted messages
     print("Type your message and press Enter. Type 'exit' to quit.")
@@ -84,7 +93,7 @@ def main():
         send_message(encrypted_message, destination_ip, port)
         time.sleep(1)  # Wait for 1 second before prompting for the next message
 
-def receive_messages(port, local_ip, private_key):
+def receive_messages(port, local_ip, public_key):
     UDP_IP = local_ip
 
     sock = generate_socket()
@@ -99,7 +108,7 @@ def receive_messages(port, local_ip, private_key):
 
         while True:
             data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
-            decrypt_message(data, private_key)
+            decrypt_message(data, public_key)
     except KeyboardInterrupt:
         print("\nReceiver stopped.")
 
