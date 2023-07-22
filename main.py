@@ -45,8 +45,16 @@ def receive_messages(port, local_ip, private_key):
             data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
             public_key = rsa.PublicKey.load_pkcs1(data)
             print("\nReceived Public Key: {}".format(public_key))
-            public_key_received = True
             sock.sendto(b"OK", addr)  # Send acknowledgment to sender
+            public_key_received = True
+
+            # Receive acknowledgment from sender
+            data, addr = sock.recvfrom(1024)
+            if data == b"OK":
+                print("\nHandshake successful. Starting encrypted communication.")
+            else:
+                print("\nHandshake failed. Unable to start encrypted communication.")
+                return
 
         while True:
             data, addr = sock.recvfrom(4096)  # Increase buffer size to accommodate larger data
@@ -61,7 +69,7 @@ def send_message(message, destination_ip, port):
 
 def main():
     #destination_ip = input("Enter the IP address of the receiver: ")
-    destination_ip = 192.168.122.226
+    destination_ip = "192.168.1.43"
     port = 12345  # Use a specific port for communication
 
     local_ip = get_local_ip()
@@ -72,7 +80,7 @@ def main():
     listen_thread = threading.Thread(target=receive_messages, args=(port, local_ip, private_key))
     listen_thread.start()
 
-    # Send public key repeatedly until receiving "OK" acknowledgment
+    # Send and receive public keys for two-way handshake
     sock = generate_socket()
     public_key_bytes = public_key.save_pkcs1()
     while True:
@@ -81,6 +89,9 @@ def main():
         if data == b"OK":
             break
         time.sleep(1)
+
+    # Send acknowledgment to receiver
+    sock.sendto(b"OK", (destination_ip, port))
 
     # Start sending encrypted messages
     print("Type your message and press Enter. Type 'exit' to quit.")
